@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::{self, Display, Formatter};
 use std::iter::ExactSizeIterator;
+use std::marker::PhantomData;
 use std::slice::Iter;
 use std::vec::IntoIter;
 
@@ -35,276 +36,203 @@ impl de::Error for Error {
     }
 }
 
-impl<'de> Deserialize<'de> for Value {
-    #[inline]
-    fn deserialize<D>(de: D) -> Result<Self, D::Error>
-        where D: de::Deserializer<'de>
-    {
-        struct ValueVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for ValueVisitor {
-            type Value = Value;
-
-            #[cold]
-            fn expecting(&self, fmt: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-                "any valid MessagePack value".fmt(fmt)
-            }
-
+macro_rules! impl_deserialize {
+    ($value_type: ty { $($extra_visitors: tt)* } ) => {
+        impl<'de> Deserialize<'de> for $value_type {
             #[inline]
-            fn visit_some<D>(self, de: D) -> Result<Value, D::Error>
+            fn deserialize<D>(de: D) -> Result<Self, D::Error>
                 where D: de::Deserializer<'de>
             {
-                Deserialize::deserialize(de)
-            }
+                struct ValueVisitor;
 
-            #[inline]
-            fn visit_none<E>(self) -> Result<Value, E> {
-                Ok(Value::Nil)
-            }
-
-            #[inline]
-            fn visit_unit<E>(self) -> Result<Value, E> {
-                Ok(Value::Nil)
-            }
-
-            #[inline]
-            fn visit_bool<E>(self, value: bool) -> Result<Value, E> {
-                Ok(Value::Boolean(value))
-            }
-
-            #[inline]
-            fn visit_u64<E>(self, value: u64) -> Result<Value, E> {
-                Ok(Value::from(value))
-            }
-
-            #[inline]
-            fn visit_i64<E>(self, value: i64) -> Result<Value, E> {
-                Ok(Value::from(value))
-            }
-
-            #[inline]
-            fn visit_f32<E>(self, value: f32) -> Result<Value, E> {
-                Ok(Value::F32(value))
-            }
-
-            #[inline]
-            fn visit_f64<E>(self, value: f64) -> Result<Value, E> {
-                Ok(Value::F64(value))
-            }
-
-            #[inline]
-            fn visit_string<E>(self, value: String) -> Result<Value, E> {
-                Ok(Value::String(Utf8String::from(value)))
-            }
-
-            #[inline]
-            fn visit_str<E>(self, value: &str) -> Result<Value, E>
-                where E: de::Error
-            {
-                self.visit_string(String::from(value))
-            }
-
-            #[inline]
-            fn visit_seq<V>(self, mut visitor: V) -> Result<Value, V::Error>
-                where V: SeqAccess<'de>
-            {
-                let mut vec = Vec::new();
-                while let Some(elem) = visitor.next_element()? {
-                    vec.push(elem);
-                }
-                Ok(Value::Array(vec))
-            }
-
-            #[inline]
-            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-                where E: de::Error
-            {
-                Ok(Value::Binary(v.to_owned()))
-            }
-
-            #[inline]
-            fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
-                where E: de::Error
-            {
-                Ok(Value::Binary(v))
-            }
-
-            #[inline]
-            fn visit_map<V>(self, mut visitor: V) -> Result<Value, V::Error>
-                where V: de::MapAccess<'de>
-            {
-                let mut pairs = vec![];
-
-                while let Some(key) = visitor.next_key()? {
-                    let val = visitor.next_value()?;
-                    pairs.push((key, val));
-                }
-
-                Ok(Value::Map(pairs))
-            }
-
-            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-                where D: Deserializer<'de>,
-            {
-                struct ExtValueVisitor;
-                impl<'de> serde::de::Visitor<'de> for ExtValueVisitor {
-                    type Value = Value;
+                impl<'de> serde::de::Visitor<'de> for ValueVisitor {
+                    type Value = $value_type;
 
                     #[cold]
                     fn expecting(&self, fmt: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-                        "a valid MessagePack Ext".fmt(fmt)
+                        "any valid MessagePack value".fmt(fmt)
                     }
 
                     #[inline]
-                    fn visit_seq<V>(self, mut seq: V) -> Result<Value, V::Error>
+                    fn visit_some<D>(self, de: D) -> Result<Self::Value, D::Error>
+                        where D: de::Deserializer<'de>
+                    {
+                        Deserialize::deserialize(de)
+                    }
+
+                    #[inline]
+                    fn visit_none<E>(self) -> Result<Self::Value, E> {
+                        Ok(Self::Value::Nil)
+                    }
+
+                    #[inline]
+                    fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                        Ok(Self::Value::Nil)
+                    }
+
+                    #[inline]
+                    fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E> {
+                        Ok(Self::Value::Boolean(value))
+                    }
+
+                    #[inline]
+                    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E> {
+                        Ok(Self::Value::from(value))
+                    }
+
+                    #[inline]
+                    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
+                        Ok(Self::Value::from(value))
+                    }
+
+                    #[inline]
+                    fn visit_f32<E>(self, value: f32) -> Result<Self::Value, E> {
+                        Ok(Self::Value::F32(value))
+                    }
+
+                    #[inline]
+                    fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E> {
+                        Ok(Self::Value::F64(value))
+                    }
+
+                    #[inline]
+                    fn visit_seq<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
                         where V: SeqAccess<'de>
                     {
-                        let tag = seq.next_element()?
-                            .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                        let bytes: serde_bytes::ByteBuf = seq.next_element()?
-                            .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-
-                        Ok(Value::Ext(tag, bytes.to_vec()))
+                        let mut vec = Vec::new();
+                        while let Some(elem) = visitor.next_element()? {
+                            vec.push(elem);
+                        }
+                        Ok(Self::Value::Array(vec))
                     }
+
+                    #[inline]
+                    fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
+                        where V: de::MapAccess<'de>
+                    {
+                        let mut pairs = vec![];
+
+                        while let Some(key) = visitor.next_key()? {
+                            let val = visitor.next_value()?;
+                            pairs.push((key, val));
+                        }
+
+                        Ok(Self::Value::Map(pairs))
+                    }
+
+                    fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+                        where D: Deserializer<'de>,
+                    {
+
+                        deserializer.deserialize_tuple(2, ExtValueVisitor(PhantomData))
+                    }
+
+                    $($extra_visitors)*
                 }
 
-                deserializer.deserialize_tuple(2, ExtValueVisitor)
+                de.deserialize_any(ValueVisitor)
             }
         }
-
-        de.deserialize_any(ValueVisitor)
     }
 }
 
-impl<'de> Deserialize<'de> for ValueRef<'de> {
+struct ExtValueVisitor<ValueType>(PhantomData<ValueType>);
+
+impl<'de, ValueType> serde::de::Visitor<'de> for ExtValueVisitor<ValueType>
+where
+    ExtValueVisitor<ValueType>: ToExtFromBytes<'de, Value = ValueType>,
+{
+    type Value = ValueType;
+
+    #[cold]
+    fn expecting(&self, fmt: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        "a valid MessagePack Ext".fmt(fmt)
+    }
+
     #[inline]
-    fn deserialize<D>(de: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de>
+    fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
+    where
+        V: SeqAccess<'de>,
     {
-        struct ValueVisitor;
+        let tag = seq
+            .next_element()?
+            .ok_or_else(|| de::Error::invalid_length(0, &self))?;
 
-        impl<'de> de::Visitor<'de> for ValueVisitor {
-            type Value = ValueRef<'de>;
+        let bytes = seq
+            .next_element()?
+            .ok_or_else(|| de::Error::invalid_length(1, &self))?;
 
-            #[cold]
-            fn expecting(&self, fmt: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-                "any valid MessagePack value".fmt(fmt)
-            }
-
-            #[inline]
-            fn visit_some<D>(self, de: D) -> Result<Self::Value, D::Error>
-                where D: Deserializer<'de>
-            {
-                Deserialize::deserialize(de)
-            }
-
-            #[inline]
-            fn visit_none<E>(self) -> Result<Self::Value, E> {
-                Ok(ValueRef::Nil)
-            }
-
-            #[inline]
-            fn visit_unit<E>(self) -> Result<Self::Value, E> {
-                Ok(ValueRef::Nil)
-            }
-
-            #[inline]
-            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E> {
-                Ok(ValueRef::Boolean(value))
-            }
-
-            #[inline]
-            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E> {
-                Ok(ValueRef::from(value))
-            }
-
-            #[inline]
-            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
-                Ok(ValueRef::from(value))
-            }
-
-            #[inline]
-            fn visit_f32<E>(self, value: f32) -> Result<Self::Value, E> {
-                Ok(ValueRef::F32(value))
-            }
-
-            #[inline]
-            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E> {
-                Ok(ValueRef::F64(value))
-            }
-
-            #[inline]
-            fn visit_borrowed_str<E>(self, value: &'de str) -> Result<Self::Value, E>
-                where E: de::Error
-            {
-                Ok(ValueRef::String(Utf8StringRef::from(value)))
-            }
-
-            #[inline]
-            fn visit_seq<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
-                where V: SeqAccess<'de>
-            {
-                let mut vec = Vec::new();
-
-                while let Some(elem) = visitor.next_element()? {
-                    vec.push(elem);
-                }
-
-                Ok(ValueRef::Array(vec))
-            }
-
-            #[inline]
-            fn visit_borrowed_bytes<E>(self, v: &'de [u8]) -> Result<Self::Value, E>
-                where E: de::Error
-            {
-                Ok(ValueRef::Binary(v))
-            }
-
-            #[inline]
-            fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
-                where V: de::MapAccess<'de>
-            {
-                let mut vec = Vec::new();
-
-                while let Some(key) = visitor.next_key()? {
-                    let val = visitor.next_value()?;
-                    vec.push((key, val));
-                }
-
-                Ok(ValueRef::Map(vec))
-            }
-
-            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-                where D: Deserializer<'de>,
-            {
-                struct ExtValueRefVisitor;
-                impl<'de> serde::de::Visitor<'de> for ExtValueRefVisitor {
-                    type Value = ValueRef<'de>;
-
-                    fn expecting(&self, fmt: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-                        "a valid MessagePack Ext".fmt(fmt)
-                    }
-
-                    #[inline]
-                    fn visit_seq<V>(self, mut seq: V) -> Result<ValueRef<'de>, V::Error>
-                        where V: SeqAccess<'de>
-                    {
-                        let tag = seq.next_element()?
-                            .ok_or_else(|| de::Error::invalid_length(0, &"invalid ext sequence"))?;
-                        let bytes: &[u8] = seq.next_element()?
-                            .ok_or_else(|| de::Error::invalid_length(1, &"invalid ext sequence"))?;
-
-                        Ok(ValueRef::Ext(tag, bytes))
-                    }
-                }
-
-                deserializer.deserialize_tuple(2, ExtValueRefVisitor)
-            }
-        }
-
-        de.deserialize_any(ValueVisitor)
+        Ok(self.to_ext_from_bytes(tag, bytes))
     }
 }
+
+trait ToExtFromBytes<'de> {
+    type Value;
+    type Bytes: Deserialize<'de>;
+    fn to_ext_from_bytes(&self, tag: i8, bytes: Self::Bytes) -> Self::Value;
+}
+
+impl ToExtFromBytes<'_> for ExtValueVisitor<Value> {
+    type Value = Value;
+    type Bytes = serde_bytes::ByteBuf;
+    #[inline]
+    fn to_ext_from_bytes(&self, tag: i8, bytes: Self::Bytes) -> Self::Value {
+        Value::Ext(tag, bytes.to_vec())
+    }
+}
+
+impl<'de> ToExtFromBytes<'de> for ExtValueVisitor<ValueRef<'de>> {
+    type Value = ValueRef<'de>;
+    type Bytes = &'de [u8];
+    #[inline]
+    fn to_ext_from_bytes(&self, tag: i8, bytes: Self::Bytes) -> Self::Value {
+        ValueRef::Ext(tag, bytes)
+    }
+}
+
+impl_deserialize!(Value {
+    #[inline]
+    fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
+        Ok(Self::Value::String(Utf8String::from(value)))
+    }
+
+    #[inline]
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where E: de::Error
+    {
+        self.visit_string(String::from(value))
+    }
+
+    #[inline]
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+        where E: de::Error
+    {
+        Ok(Self::Value::Binary(v.to_owned()))
+    }
+
+    #[inline]
+    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+        where E: de::Error
+    {
+        Ok(Self::Value::Binary(v))
+    }
+});
+
+impl_deserialize!(ValueRef<'de> {
+    #[inline]
+    fn visit_borrowed_str<E>(self, value: &'de str) -> Result<Self::Value, E>
+        where E: de::Error
+    {
+        Ok(ValueRef::String(Utf8StringRef::from(value)))
+    }
+
+    #[inline]
+    fn visit_borrowed_bytes<E>(self, v: &'de [u8]) -> Result<Self::Value, E>
+        where E: de::Error
+    {
+        Ok(ValueRef::Binary(v))
+    }
+});
 
 impl<'de> Deserializer<'de> for Value {
     type Error = Error;
