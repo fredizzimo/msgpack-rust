@@ -78,3 +78,9 @@ impl ValueExt for ValueRef<'_> {
         }
     }
 }
+
+impl<'de> ValueExt for &'de ValueRef<'de> {
+    fn unexpected(&self) -> Unexpected<'_> {
+        ValueRef::unexpected(self)
+    }
+}
