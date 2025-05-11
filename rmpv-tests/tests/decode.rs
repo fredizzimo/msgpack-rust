@@ -256,12 +256,25 @@ fn pass_enum_from_value() {
 
     assert_eq!(Enum::Unit,
         from_value(Value::Array(vec![Value::from(0), Value::Array(vec![])])).unwrap());
+    assert_eq!(Enum::Unit,
+        from_value(Value::from("Unit")).unwrap());
+    assert_eq!(Enum::Unit,
+        from_value(Value::Map(vec![(Value::from("Unit"), Value::Array(vec![]))])).unwrap());
+
     assert_eq!(Enum::Newtype("John".into()),
         from_value(Value::Array(vec![Value::from(1), Value::Array(vec![Value::from("John")])])).unwrap());
+    assert_eq!(Enum::Newtype("John".into()),
+        from_value(Value::Map(vec![(Value::from("Newtype"), Value::Array(vec![Value::from("John")]))])).unwrap());
+
     assert_eq!(Enum::Tuple("John".into(), 42),
         from_value(Value::Array(vec![Value::from(2), Value::Array(vec![Value::from("John"), Value::from(42)])])).unwrap());
+    assert_eq!(Enum::Tuple("John".into(), 42),
+        from_value(Value::Map(vec![(Value::from("Tuple"), Value::Array(vec![Value::from("John"), Value::from(42)]))])).unwrap());
+
     assert_eq!(Enum::Struct { name: "John".into(), age: 42 },
         from_value(Value::Array(vec![Value::from(3), Value::Array(vec![Value::from("John"), Value::from(42)])])).unwrap());
+    assert_eq!(Enum::Struct { name: "John".into(), age: 42 },
+        from_value(Value::Map(vec![(Value::from("Struct"), Value::Array(vec![Value::from("John"), Value::from(42)]))])).unwrap());
 }
 
 #[test]

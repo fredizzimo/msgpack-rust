@@ -3,7 +3,7 @@ use std::fmt::{self, Display, Formatter};
 use std::iter::ExactSizeIterator;
 use std::marker::PhantomData;
 
-use serde::de::{self, DeserializeSeed, IntoDeserializer, SeqAccess, Unexpected, Visitor};
+use serde::de::{self, DeserializeSeed, SeqAccess, Unexpected, Visitor};
 use serde::forward_to_deserialize_any;
 use serde::{self, Deserialize, Deserializer};
 
@@ -312,7 +312,7 @@ macro_rules! impl_deserializer {
                         }
                         let mut iter = arr.$iter();
                         let id = match iter.next() {
-                            Some(id) => deserialize_from(id)?,
+                            Some(id) => id,
                             None => {
                                 return Err(de::Error::invalid_value(Unexpected::Seq, &"array with one or two elements"));
                             }
@@ -320,8 +320,20 @@ macro_rules! impl_deserializer {
 
                         visitor.visit_enum(EnumDeserializer::new(id, iter.next()))
                     },
+                    $value_type::Map(map) => {
+                        if (map.len() != 1) {
+                            return Err(de::Error::invalid_length(map.len(), &"map with one element"));
+                        }
+                        let mut iter = map.$iter();
+                        let (id, value) = iter.next().unwrap();
+
+                        visitor.visit_enum(EnumDeserializer::new(id, Some(value)))
+                    }
+                    str @ $value_type::String(..) => {
+                        visitor.visit_enum(EnumDeserializer::new(str, None))
+                    }
                     other => {
-                        Err(de::Error::invalid_type(other.unexpected(), &"array, map or int"))
+                        Err(de::Error::invalid_type(other.unexpected(), &"array, map, int or string"))
                     }
                 }
             }
@@ -635,18 +647,19 @@ where
 }
 
 struct EnumDeserializer<U> {
-    id: u32,
+    id: U,
     value: Option<U>,
 }
 
 impl<U> EnumDeserializer<U> {
-    pub const fn new(id: u32, value: Option<U>) -> Self {
+    pub const fn new(id: U, value: Option<U>) -> Self {
         Self { id, value }
     }
 }
 
-impl<'de, U: ValueExt> de::EnumAccess<'de> for EnumDeserializer<U>
+impl<'de, U> de::EnumAccess<'de> for EnumDeserializer<U>
 where
+    U: ValueExt + Deserializer<'de, Error=Error>,
     VariantDeserializer<U>: de::VariantAccess<'de, Error = Error>,
 {
     type Error = Error;
@@ -656,7 +669,7 @@ where
     where
         V: de::DeserializeSeed<'de>,
     {
-        let variant = self.id.into_deserializer();
+        let variant = self.id;
         let visitor = VariantDeserializer { value: self.value };
         seed.deserialize(variant).map(|v| (v, visitor))
     }
