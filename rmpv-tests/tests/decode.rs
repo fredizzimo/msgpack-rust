@@ -252,6 +252,7 @@ fn pass_enum_from_value() {
     enum Enum {
         Unit,
         Newtype(String),
+        NewtypeVec(Vec<u32>),
         Tuple(String, u32),
         Struct { name: String, age: u32 },
     }
@@ -269,14 +270,21 @@ fn pass_enum_from_value() {
         from_value(Value::Array(vec![Value::from(1), Value::Array(vec![Value::from("John")])])).unwrap());
     assert_eq!(Enum::Newtype("John".into()),
         from_value(Value::Map(vec![(Value::from("Newtype"), Value::Array(vec![Value::from("John")]))])).unwrap());
+    assert_eq!(Enum::Newtype("John".into()),
+        from_value(Value::Map(vec![(Value::from("Newtype"), Value::from("John"))])).unwrap());
+
+    assert_eq!(Enum::NewtypeVec(vec![2, 3]),
+        from_value(Value::Array(vec![Value::from(2), Value::Array(vec![Value::from(2), Value::from(3)])])).unwrap());
+    assert_eq!(Enum::NewtypeVec(vec![2, 3]),
+        from_value(Value::Map(vec![(Value::from("NewtypeVec"), Value::Array(vec![Value::from(2), Value::from(3)]))])).unwrap());
 
     assert_eq!(Enum::Tuple("John".into(), 42),
-        from_value(Value::Array(vec![Value::from(2), Value::Array(vec![Value::from("John"), Value::from(42)])])).unwrap());
+        from_value(Value::Array(vec![Value::from(3), Value::Array(vec![Value::from("John"), Value::from(42)])])).unwrap());
     assert_eq!(Enum::Tuple("John".into(), 42),
         from_value(Value::Map(vec![(Value::from("Tuple"), Value::Array(vec![Value::from("John"), Value::from(42)]))])).unwrap());
 
     assert_eq!(Enum::Struct { name: "John".into(), age: 42 },
-        from_value(Value::Array(vec![Value::from(3), Value::Array(vec![Value::from("John"), Value::from(42)])])).unwrap());
+        from_value(Value::Array(vec![Value::from(4), Value::Array(vec![Value::from("John"), Value::from(42)])])).unwrap());
     assert_eq!(Enum::Struct { name: "John".into(), age: 42 },
         from_value(Value::Map(vec![(Value::from("Struct"), Value::Array(vec![Value::from("John"), Value::from(42)]))])).unwrap());
     assert_eq!(Enum::Struct { name: "John".into(), age: 42 },
