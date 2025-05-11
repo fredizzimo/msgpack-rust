@@ -382,11 +382,13 @@ macro_rules! impl_deserializer {
             type Error = Error;
 
             fn unit_variant(self) -> Result<(), Error> {
-                // Can accept only [u32].
+                // Can accept only an empty array or map.
                 match self.value {
                     Some($value_type::Array(arr)) if arr.len() == 0 => Ok(()),
                     Some($value_type::Array(..)) => Err(de::Error::invalid_value(Unexpected::Seq, &"empty array")),
-                    Some(v) => Err(de::Error::invalid_value(v.unexpected(), &"empty array")),
+                    Some($value_type::Map(map)) if map.len() == 0 => Ok(()),
+                    Some($value_type::Map(..)) => Err(de::Error::invalid_value(Unexpected::Map, &"empty map")),
+                    Some(v) => Err(de::Error::invalid_value(v.unexpected(), &"empty array or map")),
                     None => Ok(()),
                 }
             }

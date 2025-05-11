@@ -260,6 +260,8 @@ fn pass_enum_from_value() {
         from_value(Value::from("Unit")).unwrap());
     assert_eq!(Enum::Unit,
         from_value(Value::Map(vec![(Value::from("Unit"), Value::Array(vec![]))])).unwrap());
+    assert_eq!(Enum::Unit,
+        from_value(Value::Map(vec![(Value::from("Unit"), Value::Map(vec![]))])).unwrap());
 
     assert_eq!(Enum::Newtype("John".into()),
         from_value(Value::Array(vec![Value::from(1), Value::Array(vec![Value::from("John")])])).unwrap());
