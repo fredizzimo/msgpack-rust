@@ -344,6 +344,69 @@ fn pass_internally_tagged_enum_from_value() {
 }
 
 #[test]
+fn pass_adjacently_tagged_enum_from_value() {
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct InnerStruct {
+        a: i32,
+        b: Vec<String>,
+    }
+
+    #[derive(Debug, PartialEq, Deserialize)]
+    #[serde(tag = "type", content = "content")]
+    enum Enum {
+        Unit,
+        Newtype(String),
+        NewtypeVec(Vec<u32>),
+        Tuple(String, u32),
+        Struct { name: String, age: u32 },
+        NewtypeStruct(InnerStruct),
+    }
+
+    assert_eq!(Enum::Unit,
+        from_value(Value::Map(vec![(Value::from("type"), Value::from("Unit"))])).unwrap());
+    assert_eq!(Enum::Unit,
+        from_value(Value::Map(vec![
+            (Value::from("type"), Value::from("Unit")),
+            (Value::from("content"), Value::Nil)
+        ])).unwrap());
+
+    assert_eq!(Enum::Newtype("John".into()),
+        from_value(Value::Map(vec![
+            (Value::from("type"), Value::from("Newtype")),
+            (Value::from("content"), Value::from("John"))
+        ])).unwrap());
+
+    assert_eq!(Enum::NewtypeVec(vec![2, 3]),
+        from_value(Value::Map(vec![
+            (Value::from("type"), Value::from("NewtypeVec")),
+            (Value::from("content"), Value::Array(vec![Value::from(2), Value::from(3)]))
+        ])).unwrap());
+
+    assert_eq!(Enum::Tuple("John".into(), 42),
+        from_value(Value::Map(vec![
+            (Value::from("type"), Value::from("Tuple")),
+            (Value::from("content"), Value::Array(vec![Value::from("John"), Value::from(42)]))
+        ])).unwrap());
+
+    assert_eq!(Enum::Struct { name: "John".into(), age: 42 },
+        from_value(Value::Map(vec![
+            (Value::from("type"), Value::from("Struct")),
+            (Value::from("content"), Value::Map(vec![
+                (Value::from("type"), Value::from("Struct")),
+                (Value::from("name"), Value::from("John")),
+                (Value::from("age"), Value::from(42)),
+        ]))])).unwrap());
+
+    assert_eq!(Enum::NewtypeStruct(InnerStruct { a: -5, b: vec!["Hello".into(), "World".into()] }),
+        from_value(Value::Map(vec![
+            (Value::from("type"), Value::from("NewtypeStruct")),
+            (Value::from("content"), Value::Map(vec![
+            (Value::from("b"), Value::from(vec![Value::from("Hello"), Value::from("World")])),
+            (Value::from("a"), Value::from(-5))
+        ]))])).unwrap());
+}
+
+#[test]
 fn pass_tuple_struct_from_ext() {
     #[derive(Debug, PartialEq)]
     struct ExtStruct(i8, Vec<u8>);
