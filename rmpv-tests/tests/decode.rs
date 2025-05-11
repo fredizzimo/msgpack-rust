@@ -242,6 +242,8 @@ fn pass_struct_from_value() {
 
     assert_eq!(Struct { name: "John".into(), age: 42 },
         from_value(Value::Array(vec![Value::from("John"), Value::from(42)])).unwrap());
+    assert_eq!(Struct { name: "John".into(), age: 42 },
+        from_value(Value::Map(vec![(Value::from("name"), Value::from("John")), (Value::from("age"), Value::from(42))])).unwrap());
 }
 
 #[test]
@@ -277,6 +279,10 @@ fn pass_enum_from_value() {
         from_value(Value::Array(vec![Value::from(3), Value::Array(vec![Value::from("John"), Value::from(42)])])).unwrap());
     assert_eq!(Enum::Struct { name: "John".into(), age: 42 },
         from_value(Value::Map(vec![(Value::from("Struct"), Value::Array(vec![Value::from("John"), Value::from(42)]))])).unwrap());
+    assert_eq!(Enum::Struct { name: "John".into(), age: 42 },
+        from_value(
+            Value::Map(vec![(Value::from("Struct"),
+            Value::Map(vec![(Value::from("name"), Value::from("John")), (Value::from("age"), Value::from(42))]))])).unwrap());
 }
 
 #[test]
