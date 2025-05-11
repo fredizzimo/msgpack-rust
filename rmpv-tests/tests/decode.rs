@@ -407,6 +407,44 @@ fn pass_adjacently_tagged_enum_from_value() {
 }
 
 #[test]
+fn pass_untagged_enum_from_value() {
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct InnerStruct {
+        a: i32,
+        b: Vec<String>,
+    }
+
+    #[derive(Debug, PartialEq, Deserialize)]
+    #[serde(untagged)]
+    enum Enum {
+        Unit,
+        Newtype(String),
+        NewtypeVec(Vec<u32>),
+        Tuple(String, u32),
+        Struct { name: String, age: u32 },
+    }
+
+    assert_eq!(Enum::Unit,
+        from_value(Value::Nil).unwrap());
+
+    assert_eq!(Enum::Newtype("John".into()),
+            from_value(Value::from("John")).unwrap());
+
+    assert_eq!(Enum::NewtypeVec(vec![2, 3]),
+        from_value(Value::Array(vec![Value::from(2), Value::from(3)])).unwrap());
+
+    assert_eq!(Enum::Tuple("John".into(), 42),
+        from_value(Value::Array(vec![Value::from("John"), Value::from(42)])).unwrap());
+
+    assert_eq!(Enum::Struct { name: "John".into(), age: 42 },
+        from_value(Value::Map(vec![
+                (Value::from("type"), Value::from("Struct")),
+                (Value::from("name"), Value::from("John")),
+                (Value::from("age"), Value::from(42)),
+        ])).unwrap());
+}
+
+#[test]
 fn pass_tuple_struct_from_ext() {
     #[derive(Debug, PartialEq)]
     struct ExtStruct(i8, Vec<u8>);
