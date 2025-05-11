@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use serde_bytes::ByteBuf;
+use serde_repr::Deserialize_repr;
 use std::collections::BTreeMap;
 
 use rmpv::decode;
@@ -442,6 +443,21 @@ fn pass_untagged_enum_from_value() {
                 (Value::from("name"), Value::from("John")),
                 (Value::from("age"), Value::from(42)),
         ])).unwrap());
+}
+
+#[test]
+fn pass_u8_enum_from_value() {
+    #[derive(Deserialize_repr, PartialEq, Debug)]
+    #[repr(u8)]
+    enum SmallPrime {
+        Two = 2,
+        Three = 3,
+        Five = 5,
+        Seven = 7,
+    }
+
+    assert_eq!(SmallPrime::Three,
+        from_value(Value::from(3)).unwrap());
 }
 
 #[test]
