@@ -424,6 +424,7 @@ fn pass_untagged_enum_from_value() {
         NewtypeVec(Vec<u32>),
         Tuple(String, u32),
         Struct { name: String, age: u32 },
+        NewtypeStruct(InnerStruct),
     }
 
     assert_eq!(Enum::Unit,
@@ -448,6 +449,12 @@ fn pass_untagged_enum_from_value() {
         from_value(Value::Map(vec![
             (Value::from("name"), Value::from("John")),
             (Value::from("age"), Value::from(42)),
+        ])).unwrap());
+
+    assert_eq!(Enum::NewtypeStruct(InnerStruct { a: -5, b: vec!["Hello".into(), "World".into()] }),
+        from_value(Value::Map(vec![
+            (Value::from("b"), Value::from(vec![Value::from("Hello"), Value::from("World")])),
+            (Value::from("a"), Value::from(-5))
         ])).unwrap());
 }
 
