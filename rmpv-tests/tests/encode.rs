@@ -406,17 +406,30 @@ fn pass_untagged_enum_to_value() {
     }
 
     assert_eq!(Value::Nil,
+        to_value(Enum::Unit).unwrap());
+    assert_eq!(Value::Nil,
         to_value_named(Enum::Unit).unwrap());
 
+    assert_eq!(Value::from("John"),
+        to_value(Enum::Newtype("John".into())).unwrap());
     assert_eq!(Value::from("John"),
         to_value_named(Enum::Newtype("John".into())).unwrap());
 
     assert_eq!(Value::Array(vec![Value::from(2), Value::from(3)]),
+        to_value(Enum::NewtypeVec(vec![2, 3])).unwrap());
+    assert_eq!(Value::Array(vec![Value::from(2), Value::from(3)]),
         to_value_named(Enum::NewtypeVec(vec![2, 3])).unwrap());
 
     assert_eq!(Value::Array(vec![Value::from("John"), Value::from(42)]),
+        to_value(Enum::Tuple("John".into(), 42)).unwrap());
+    assert_eq!(Value::Array(vec![Value::from("John"), Value::from(42)]),
         to_value_named(Enum::Tuple("John".into(), 42)).unwrap());
 
+    // Unnamed values can be serialized, but the deserialization in ambiguous
+    // It also matches the Tuple representation
+    assert_eq!(Value::Array(vec![
+            Value::from("John"), Value::from(42)]),
+        to_value(Enum::Struct { name: "John".into(), age: 42 }).unwrap());
     assert_eq!(Value::Map(vec![
             (Value::from("name"), Value::from("John")),
             (Value::from("age"), Value::from(42))]),
