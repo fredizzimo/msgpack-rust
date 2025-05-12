@@ -284,6 +284,8 @@ fn pass_enum_from_value() {
     assert_eq!(Enum::NewtypeVec(vec![2, 3]),
         from_value(Value::Array(vec![Value::from(2), Value::Array(vec![Value::from(2), Value::from(3)])])).unwrap());
     assert_eq!(Enum::NewtypeVec(vec![2, 3]),
+        from_value(Value::Array(vec![Value::from(2), Value::Array(vec![Value::Array(vec![Value::from(2), Value::from(3)])])])).unwrap());
+    assert_eq!(Enum::NewtypeVec(vec![2, 3]),
         from_value(Value::Map(vec![(Value::from("NewtypeVec"), Value::Array(vec![Value::from(2), Value::from(3)]))])).unwrap());
 
     assert_eq!(Enum::Tuple("John".into(), 42),
@@ -393,7 +395,6 @@ fn pass_adjacently_tagged_enum_from_value() {
         from_value(Value::Map(vec![
             (Value::from("type"), Value::from("Struct")),
             (Value::from("content"), Value::Map(vec![
-                (Value::from("type"), Value::from("Struct")),
                 (Value::from("name"), Value::from("John")),
                 (Value::from("age"), Value::from(42)),
         ]))])).unwrap());
@@ -429,7 +430,7 @@ fn pass_untagged_enum_from_value() {
         from_value(Value::Nil).unwrap());
 
     assert_eq!(Enum::Newtype("John".into()),
-            from_value(Value::from("John")).unwrap());
+         from_value(Value::from("John")).unwrap());
 
     assert_eq!(Enum::NewtypeVec(vec![2, 3]),
         from_value(Value::Array(vec![Value::from(2), Value::from(3)])).unwrap());
@@ -439,9 +440,8 @@ fn pass_untagged_enum_from_value() {
 
     assert_eq!(Enum::Struct { name: "John".into(), age: 42 },
         from_value(Value::Map(vec![
-                (Value::from("type"), Value::from("Struct")),
-                (Value::from("name"), Value::from("John")),
-                (Value::from("age"), Value::from(42)),
+            (Value::from("name"), Value::from("John")),
+            (Value::from("age"), Value::from(42)),
         ])).unwrap());
 }
 
