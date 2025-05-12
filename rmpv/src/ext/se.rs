@@ -1,3 +1,4 @@
+use std::default::Default;
 use std::fmt::Display;
 
 use serde::ser::{
@@ -58,7 +59,22 @@ impl ser::Error for Error {
     }
 }
 
-struct Serializer;
+#[derive(Clone)]
+struct Config {
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+        }
+    }
+}
+
+#[derive(Default, Clone)]
+struct Serializer {
+    config: Config,
+}
+
 
 /// Convert a `T` into `rmpv::Value` which is an enum that can represent any valid MessagePack data.
 ///
@@ -73,7 +89,15 @@ struct Serializer;
 /// ```
 #[inline]
 pub fn to_value<T: Serialize>(value: T) -> Result<Value, Error> {
-    value.serialize(Serializer)
+    value.serialize(Serializer::default())
+}
+
+impl Serializer {
+    fn new_config(config: Config) -> Self {
+        Self {
+            config
+        }
+    }
 }
 
 impl ser::Serializer for Serializer {
@@ -190,7 +214,7 @@ impl ser::Serializer for Serializer {
             return ext_se.value();
         }
 
-        to_value(value)
+        value.serialize(self)
     }
 
     fn serialize_newtype_variant<T: ?Sized>(self, _name: &'static str, idx: u32, _variant: &'static str, value: &T) -> Result<Self::Ok, Self::Error>
@@ -198,7 +222,7 @@ impl ser::Serializer for Serializer {
     {
         let vec = vec![
             Value::from(idx),
-            Value::Array(vec![to_value(value)?]),
+            Value::Array(vec![value.serialize(self)?]),
         ];
         Ok(Value::Array(vec))
     }
@@ -217,6 +241,7 @@ impl ser::Serializer for Serializer {
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
         let se = SerializeVec {
+            serializer: self,
             vec: Vec::with_capacity(len.unwrap_or(0)),
         };
         Ok(se)
@@ -232,6 +257,7 @@ impl ser::Serializer for Serializer {
 
     fn serialize_tuple_variant(self, _name: &'static str, idx: u32, _variant: &'static str, len: usize) -> Result<Self::SerializeTupleVariant, Error> {
         let se = SerializeTupleVariant {
+            serializer: self,
             idx,
             vec: Vec::with_capacity(len),
         };
@@ -240,6 +266,7 @@ impl ser::Serializer for Serializer {
 
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Error> {
         let se = DefaultSerializeMap {
+            serializer: self,
             map: Vec::with_capacity(len.unwrap_or(0)),
             next_key: None,
         };
@@ -254,6 +281,7 @@ impl ser::Serializer for Serializer {
     #[inline]
     fn serialize_struct_variant(self, _name: &'static str, idx: u32, _variant: &'static str, len: usize) -> Result<Self::SerializeStructVariant, Error> {
         let se = SerializeStructVariant {
+            serializer: self,
             idx,
             vec: Vec::with_capacity(len),
         };
@@ -658,6 +686,7 @@ impl ExtFieldSerializer {
 
 #[doc(hidden)]
 pub struct SerializeVec {
+    serializer: Serializer,
     vec: Vec<Value>,
 }
 
@@ -665,18 +694,28 @@ pub struct SerializeVec {
 /// index with a tuple of arguments.
 #[doc(hidden)]
 pub struct SerializeTupleVariant {
+    serializer: Serializer,
     idx: u32,
     vec: Vec<Value>,
 }
 
 #[doc(hidden)]
 pub struct DefaultSerializeMap {
+    serializer: Serializer,
     map: Vec<(Value, Value)>,
     next_key: Option<Value>,
 }
 
 #[doc(hidden)]
+pub struct DefaultSerializeStruct {
+    serializer: Serializer,
+    named: bool,
+    map: Vec<(Value, Value)>,
+}
+
+#[doc(hidden)]
 pub struct SerializeStructVariant {
+    serializer: Serializer,
     idx: u32,
     vec: Vec<Value>,
 }
@@ -689,7 +728,7 @@ impl SerializeSeq for SerializeVec {
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Error>
         where T: Serialize
     {
-        self.vec.push(to_value(value)?);
+        self.vec.push(value.serialize(self.serializer.clone())?);
         Ok(())
     }
 
@@ -741,7 +780,7 @@ impl ser::SerializeTupleVariant for SerializeTupleVariant {
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Error>
         where T: Serialize
     {
-        self.vec.push(to_value(value)?);
+        self.vec.push(value.serialize(self.serializer.clone())?);
         Ok(())
     }
 
@@ -759,7 +798,7 @@ impl ser::SerializeMap for DefaultSerializeMap {
     fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Error>
         where T: Serialize
     {
-        self.next_key = Some(to_value(key)?);
+        self.next_key = Some(key.serialize(self.serializer.clone())?);
         Ok(())
     }
 
@@ -770,7 +809,7 @@ impl ser::SerializeMap for DefaultSerializeMap {
         // expected failure.
         let key = self.next_key.take()
             .expect("`serialize_value` called before `serialize_key`");
-        self.map.push((key, to_value(value)?));
+        self.map.push((key, value.serialize(self.serializer.clone())?));
         Ok(())
     }
 
@@ -805,7 +844,7 @@ impl ser::SerializeStructVariant for SerializeStructVariant {
     fn serialize_field<T: ?Sized>(&mut self, _key: &'static str, value: &T) -> Result<(), Error>
         where T: Serialize
     {
-        self.vec.push(to_value(value)?);
+        self.vec.push(value.serialize(self.serializer.clone())?);
         Ok(())
     }
 

@@ -6,7 +6,7 @@ use serde_bytes::{ByteBuf, Bytes};
 
 use rmp_serde::Serializer;
 use rmpv::encode;
-use rmpv::ext::to_value;
+use rmpv::ext::{to_value, to_value_named};
 use rmpv::Value;
 
 /// Tests that a `Value` is properly encoded using two different mechanisms: direct serialization
@@ -234,6 +234,10 @@ fn pass_struct_to_value() {
 
     assert_eq!(Value::Array(vec![Value::from("John"), Value::from(42)]),
         to_value(Struct { name: "John".into(), age: 42 }).unwrap());
+    assert_eq!(Value::Map(vec![
+            (Value::from("name"), Value::from("John")), 
+            (Value::from("age"), Value::from(42))]),
+        to_value_named(Struct { name: "John".into(), age: 42 }).unwrap());
 }
 
 #[test]
@@ -248,12 +252,19 @@ fn pass_enum_to_value() {
 
     assert_eq!(Value::Array(vec![Value::from(0), Value::Array(vec![])]),
         to_value(Enum::Unit).unwrap());
+
     assert_eq!(Value::Array(vec![Value::from(1), Value::Array(vec![Value::from("John")])]),
         to_value(Enum::Newtype("John".into())).unwrap());
+
     assert_eq!(Value::Array(vec![Value::from(2), Value::Array(vec![Value::from("John"), Value::from(42)])]),
         to_value(Enum::Tuple("John".into(), 42)).unwrap());
+
     assert_eq!(Value::Array(vec![Value::from(3), Value::Array(vec![Value::from("John"), Value::from(42)])]),
         to_value(Enum::Struct { name: "John".into(), age: 42 }).unwrap());
+    assert_eq!(Value::Map(vec![
+            (Value::from("name"), Value::from("John")), 
+            (Value::from("age"), Value::from(42))]),
+        to_value_named(Enum::Struct { name: "John".into(), age: 42 }).unwrap());
 }
 
 #[test]
