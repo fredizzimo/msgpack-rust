@@ -243,26 +243,181 @@ fn pass_struct_to_value() {
 #[test]
 fn pass_enum_to_value() {
     #[derive(Debug, PartialEq, Serialize)]
+    struct InnerStruct {
+        a: i32,
+        b: Vec<String>,
+    }
+
+    #[derive(Debug, PartialEq, Serialize)]
     enum Enum {
         Unit,
         Newtype(String),
+        NewtypeVec(Vec<u32>),
         Tuple(String, u32),
         Struct { name: String, age: u32 },
+        NewtypeStruct(InnerStruct),
     }
 
     assert_eq!(Value::Array(vec![Value::from(0), Value::Array(vec![])]),
         to_value(Enum::Unit).unwrap());
+    assert_eq!(Value::from("Unit"),
+        to_value_named(Enum::Unit).unwrap());
 
     assert_eq!(Value::Array(vec![Value::from(1), Value::Array(vec![Value::from("John")])]),
         to_value(Enum::Newtype("John".into())).unwrap());
+    assert_eq!(Value::Map(vec![(Value::from("Newtype"), Value::from("John"))]),
+        to_value_named(Enum::Newtype("John".into())).unwrap());
 
-    assert_eq!(Value::Array(vec![Value::from(2), Value::Array(vec![Value::from("John"), Value::from(42)])]),
-        to_value(Enum::Tuple("John".into(), 42)).unwrap());
+    assert_eq!(Value::Array(vec![Value::from(2), Value::Array(vec![(Value::Array(vec![Value::from(2), Value::from(3)]))])]),
+        to_value(Enum::NewtypeVec(vec![2, 3])).unwrap());
+    assert_eq!(Value::Map(vec![(Value::from("NewtypeVec"), Value::Array(vec![Value::from(2), Value::from(3)]))]),
+        to_value_named(Enum::NewtypeVec(vec![2, 3])).unwrap());
 
     assert_eq!(Value::Array(vec![Value::from(3), Value::Array(vec![Value::from("John"), Value::from(42)])]),
+        to_value(Enum::Tuple("John".into(), 42)).unwrap());
+    assert_eq!(Value::Map(vec![(Value::from("Tuple"), Value::Array(vec![Value::from("John"), Value::from(42)]))]),
+        to_value_named(Enum::Tuple("John".into(), 42)).unwrap());
+
+    assert_eq!(Value::Array(vec![Value::from(4), Value::Array(vec![Value::from("John"), Value::from(42)])]),
         to_value(Enum::Struct { name: "John".into(), age: 42 }).unwrap());
+    assert_eq!(
+            Value::Map(vec![(Value::from("Struct"),
+            Value::Map(vec![(Value::from("name"), Value::from("John")), (Value::from("age"), Value::from(42))]))]),
+        to_value_named(Enum::Struct { name: "John".into(), age: 42 }).unwrap());
+
+    assert_eq!(Value::Array(vec![Value::from(5),
+        Value::Array(vec![Value::Array(vec![Value::from(-5), Value::from(vec![Value::from("Hello"), Value::from("World")])])])]),
+        to_value(Enum::NewtypeStruct(InnerStruct { a: -5, b: vec!["Hello".into(), "World".into()] })).unwrap());
+    assert_eq!(Value::Map(vec![(Value::from("NewtypeStruct"), Value::Map(vec![
+            (Value::from("a"), Value::from(-5)),
+            (Value::from("b"), Value::from(vec![Value::from("Hello"), Value::from("World")]))]))]),
+        to_value_named(Enum::NewtypeStruct(InnerStruct { a: -5, b: vec!["Hello".into(), "World".into()] })).unwrap());
+}
+
+#[test]
+fn pass_internally_tagged_enum_to_value() {
+    #[derive(Debug, PartialEq, Serialize)]
+    struct InnerStruct {
+        a: i32,
+        b: Vec<String>,
+    }
+
+    #[derive(Debug, PartialEq, Serialize)]
+    #[serde(tag = "type")]
+    enum Enum {
+        Unit,
+        NewtypeStruct(InnerStruct),
+        Struct { name: String, age: u32 },
+    }
+
+    assert_eq!(Value::Map(vec![(Value::from("type"), Value::from("Unit"))]),
+        to_value_named(Enum::Unit).unwrap());
+
     assert_eq!(Value::Map(vec![
-            (Value::from("name"), Value::from("John")), 
+            (Value::from("type"), Value::from("NewtypeStruct")),
+            (Value::from("a"), Value::from(-5)),
+            (Value::from("b"), Value::from(vec![Value::from("Hello"), Value::from("World")])),
+        ]),
+        to_value_named(Enum::NewtypeStruct(InnerStruct { a: -5, b: vec!["Hello".into(), "World".into()] })).unwrap());
+
+    assert_eq!(Value::Map(vec![
+            (Value::from("type"), Value::from("Struct")),
+            (Value::from("name"), Value::from("John")),
+            (Value::from("age"), Value::from(42)),
+        ]),
+        to_value_named(Enum::Struct { name: "John".into(), age: 42 }).unwrap())
+}
+
+#[test]
+fn pass_adjacently_tagged_enum_to_value() {
+    #[derive(Debug, PartialEq, Serialize)]
+    struct InnerStruct {
+        a: i32,
+        b: Vec<String>,
+    }
+
+    #[derive(Debug, PartialEq, Serialize)]
+    #[serde(tag = "type", content = "content")]
+    enum Enum {
+        Unit,
+        Newtype(String),
+        NewtypeVec(Vec<u32>),
+        Tuple(String, u32),
+        Struct { name: String, age: u32 },
+        NewtypeStruct(InnerStruct),
+    }
+
+    assert_eq!(Value::Map(vec![(Value::from("type"), Value::from("Unit"))]),
+        to_value_named(Enum::Unit).unwrap());
+
+    assert_eq!(Value::Map(vec![
+            (Value::from("type"), Value::from("Newtype")),
+            (Value::from("content"), Value::from("John"))
+        ]),
+        to_value_named(Enum::Newtype("John".into())).unwrap());
+
+    assert_eq!(Value::Map(vec![
+            (Value::from("type"), Value::from("NewtypeVec")),
+            (Value::from("content"), Value::Array(vec![Value::from(2), Value::from(3)]))
+        ]),
+        to_value_named(Enum::NewtypeVec(vec![2, 3])).unwrap());
+
+    assert_eq!(Value::Map(vec![
+            (Value::from("type"), Value::from("Tuple")),
+            (Value::from("content"), Value::Array(vec![Value::from("John"), Value::from(42)]))
+        ]),
+        to_value_named(Enum::Tuple("John".into(), 42)).unwrap());
+
+    assert_eq!(Value::Map(vec![
+            (Value::from("type"), Value::from("Struct")),
+            (Value::from("content"), Value::Map(vec![
+                (Value::from("name"), Value::from("John")),
+                (Value::from("age"), Value::from(42)),
+        ]))]),
+        to_value_named(Enum::Struct { name: "John".into(), age: 42 }).unwrap());
+
+    assert_eq!(Value::Map(vec![
+            (Value::from("type"), Value::from("NewtypeStruct")),
+            (Value::from("content"), Value::Map(vec![
+            (Value::from("a"), Value::from(-5)),
+            (Value::from("b"), Value::from(vec![Value::from("Hello"), Value::from("World")])),
+        ]))]),
+        to_value_named(Enum::NewtypeStruct(InnerStruct { a: -5, b: vec!["Hello".into(), "World".into()] })).unwrap());
+}
+
+
+#[test]
+fn pass_untagged_enum_to_value() {
+    #[derive(Debug, PartialEq, Serialize)]
+    struct InnerStruct {
+        a: i32,
+        b: Vec<String>,
+    }
+
+    #[derive(Debug, PartialEq, Serialize)]
+    #[serde(untagged)]
+    enum Enum {
+        Unit,
+        Newtype(String),
+        NewtypeVec(Vec<u32>),
+        Tuple(String, u32),
+        Struct { name: String, age: u32 },
+    }
+
+    assert_eq!(Value::Nil,
+        to_value_named(Enum::Unit).unwrap());
+
+    assert_eq!(Value::from("John"),
+        to_value_named(Enum::Newtype("John".into())).unwrap());
+
+    assert_eq!(Value::Array(vec![Value::from(2), Value::from(3)]),
+        to_value_named(Enum::NewtypeVec(vec![2, 3])).unwrap());
+
+    assert_eq!(Value::Array(vec![Value::from("John"), Value::from(42)]),
+        to_value_named(Enum::Tuple("John".into(), 42)).unwrap());
+
+    assert_eq!(Value::Map(vec![
+            (Value::from("name"), Value::from("John")),
             (Value::from("age"), Value::from(42))]),
         to_value_named(Enum::Struct { name: "John".into(), age: 42 }).unwrap());
 }

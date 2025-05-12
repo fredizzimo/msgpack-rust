@@ -61,11 +61,13 @@ impl ser::Error for Error {
 
 #[derive(Clone)]
 struct Config {
+    is_named: bool,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
+            is_named: false
         }
     }
 }
@@ -92,6 +94,13 @@ pub fn to_value<T: Serialize>(value: T) -> Result<Value, Error> {
     value.serialize(Serializer::default())
 }
 
+pub fn to_value_named<T: Serialize>(value: T) -> Result<Value, Error> {
+    value.serialize(Serializer::new_config(Config {
+        is_named: true,
+        ..Default::default()
+    }))
+}
+
 impl Serializer {
     fn new_config(config: Config) -> Self {
         Self {
@@ -109,8 +118,8 @@ impl ser::Serializer for Serializer {
     type SerializeTupleStruct = SerializeVec;
     type SerializeTupleVariant = SerializeTupleVariant;
     type SerializeMap = DefaultSerializeMap;
-    type SerializeStruct = SerializeVec;
-    type SerializeStructVariant = SerializeStructVariant;
+    type SerializeStruct = DefaultSerializeStruct;
+    type SerializeStructVariant = DefaultSerializeStruct;
 
     #[inline]
     fn serialize_bool(self, val: bool) -> Result<Self::Ok, Self::Error> {
@@ -195,12 +204,16 @@ impl ser::Serializer for Serializer {
     }
 
     #[inline]
-    fn serialize_unit_variant(self, _name: &'static str, idx: u32, _variant: &'static str) -> Result<Self::Ok, Self::Error> {
-        let vec = vec![
-            Value::from(idx),
-            Value::Array(Vec::new())
-        ];
-        Ok(Value::Array(vec))
+    fn serialize_unit_variant(self, _name: &'static str, idx: u32, variant: &'static str) -> Result<Self::Ok, Self::Error> {
+        if self.config.is_named {
+            Ok(Value::from(variant))
+        } else {
+            let vec = vec![
+                Value::from(idx),
+                Value::Array(Vec::new())
+            ];
+            Ok(Value::Array(vec))
+        }
     }
 
     #[inline]
@@ -217,14 +230,19 @@ impl ser::Serializer for Serializer {
         value.serialize(self)
     }
 
-    fn serialize_newtype_variant<T: ?Sized>(self, _name: &'static str, idx: u32, _variant: &'static str, value: &T) -> Result<Self::Ok, Self::Error>
+    fn serialize_newtype_variant<T: ?Sized>(self, _name: &'static str, idx: u32, variant: &'static str, value: &T) -> Result<Self::Ok, Self::Error>
         where T: Serialize
     {
-        let vec = vec![
-            Value::from(idx),
-            Value::Array(vec![value.serialize(self)?]),
-        ];
-        Ok(Value::Array(vec))
+        if self.config.is_named {
+            let vec = vec![(Value::from(variant), value.serialize(self)?)];
+            Ok(Value::Map(vec))
+        } else {
+            let vec = vec![
+                Value::from(idx),
+                Value::Array(vec![value.serialize(self)?]),
+            ];
+            Ok(Value::Array(vec))
+        }
     }
 
     #[inline]
@@ -255,10 +273,11 @@ impl ser::Serializer for Serializer {
         self.serialize_tuple(len)
     }
 
-    fn serialize_tuple_variant(self, _name: &'static str, idx: u32, _variant: &'static str, len: usize) -> Result<Self::SerializeTupleVariant, Error> {
+    fn serialize_tuple_variant(self, _name: &'static str, idx: u32, variant: &'static str, len: usize) -> Result<Self::SerializeTupleVariant, Error> {
         let se = SerializeTupleVariant {
             serializer: self,
             idx,
+            variant,
             vec: Vec::with_capacity(len),
         };
         Ok(se)
@@ -274,16 +293,23 @@ impl ser::Serializer for Serializer {
     }
 
     #[inline]
-    fn serialize_struct(self, name: &'static str, len: usize) -> Result<Self::SerializeStruct, Error> {
-        self.serialize_tuple_struct(name, len)
+    fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct, Error> {
+        let se = DefaultSerializeStruct {
+            serializer: self,
+            idx: 0,
+            variant: "",
+            map: Vec::with_capacity(len),
+        };
+        return Ok(se)
     }
 
     #[inline]
-    fn serialize_struct_variant(self, _name: &'static str, idx: u32, _variant: &'static str, len: usize) -> Result<Self::SerializeStructVariant, Error> {
-        let se = SerializeStructVariant {
+    fn serialize_struct_variant(self, _name: &'static str, idx: u32, variant: &'static str, len: usize) -> Result<Self::SerializeStructVariant, Error> {
+        let se = DefaultSerializeStruct  {
             serializer: self,
             idx,
-            vec: Vec::with_capacity(len),
+            variant,
+            map: Vec::with_capacity(len),
         };
         Ok(se)
     }
@@ -696,6 +722,7 @@ pub struct SerializeVec {
 pub struct SerializeTupleVariant {
     serializer: Serializer,
     idx: u32,
+    variant: &'static str,
     vec: Vec<Value>,
 }
 
@@ -709,15 +736,9 @@ pub struct DefaultSerializeMap {
 #[doc(hidden)]
 pub struct DefaultSerializeStruct {
     serializer: Serializer,
-    named: bool,
-    map: Vec<(Value, Value)>,
-}
-
-#[doc(hidden)]
-pub struct SerializeStructVariant {
-    serializer: Serializer,
     idx: u32,
-    vec: Vec<Value>,
+    variant: &'static str,
+    map: Vec<(Value, Value)>,
 }
 
 impl SerializeSeq for SerializeVec {
@@ -786,7 +807,11 @@ impl ser::SerializeTupleVariant for SerializeTupleVariant {
 
     #[inline]
     fn end(self) -> Result<Value, Error> {
-        Ok(Value::Array(vec![Value::from(self.idx), Value::Array(self.vec)]))
+        if self.serializer.config.is_named {
+            Ok(Value::Map(vec![(Value::from(self.variant), Value::Array(self.vec))]))
+        } else {
+            Ok(Value::Array(vec![Value::from(self.idx), Value::Array(self.vec)]))
+        }
     }
 }
 
@@ -819,40 +844,51 @@ impl ser::SerializeMap for DefaultSerializeMap {
     }
 }
 
-impl SerializeStruct for SerializeVec {
+impl SerializeStruct for DefaultSerializeStruct {
     type Ok = Value;
     type Error = Error;
 
     #[inline]
-    fn serialize_field<T: ?Sized>(&mut self, _key: &'static str, value: &T) -> Result<(), Error>
+    fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<(), Error>
         where T: Serialize
     {
-        ser::SerializeSeq::serialize_element(self, value)
-    }
-
-    #[inline]
-    fn end(self) -> Result<Value, Error> {
-        ser::SerializeSeq::end(self)
-    }
-}
-
-impl ser::SerializeStructVariant for SerializeStructVariant {
-    type Ok = Value;
-    type Error = Error;
-
-    #[inline]
-    fn serialize_field<T: ?Sized>(&mut self, _key: &'static str, value: &T) -> Result<(), Error>
-        where T: Serialize
-    {
-        self.vec.push(value.serialize(self.serializer.clone())?);
+        self.map.push((key.serialize(self.serializer.clone())?, value.serialize(self.serializer.clone())?));
         Ok(())
     }
 
     #[inline]
     fn end(self) -> Result<Value, Error> {
-        Ok(Value::Array(vec![
-            Value::from(self.idx),
-            Value::Array(self.vec),
-        ]))
+        if self.serializer.config.is_named {
+          return Ok(Value::Map(self.map))
+        }
+
+        let stripped_keys: Vec<Value> = self.map.into_iter().map(|(_, val)| val).collect();
+        Ok(Value::Array(stripped_keys))
+    }
+}
+
+impl ser::SerializeStructVariant for DefaultSerializeStruct {
+    type Ok = Value;
+    type Error = Error;
+
+    #[inline]
+    fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<(), Error>
+        where T: Serialize
+    {
+        SerializeStruct::serialize_field(self, key, value)
+    }
+
+    #[inline]
+    fn end(self) -> Result<Value, Error> {
+        if self.serializer.config.is_named {
+            Ok(Value::Map(vec![
+                (Value::from(self.variant), SerializeStruct::end(self)?),
+            ]))
+        } else {
+            Ok(Value::Array(vec![
+                Value::from(self.idx),
+                SerializeStruct::end(self)?,
+            ]))
+        }
     }
 }
