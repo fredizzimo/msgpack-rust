@@ -438,6 +438,12 @@ fn pass_untagged_enum_from_value() {
     assert_eq!(Enum::Tuple("John".into(), 42),
         from_value(Value::Array(vec![Value::from("John"), Value::from(42)])).unwrap());
 
+    // The result is ambiguous when the field names are not included
+    // assert_eq!(Enum::Struct { name: "John".into(), age: 42 },
+    //     from_value(Value::Array(vec![
+    //         Value::from("John"),
+    //         Value::from(42),
+    //     ])).unwrap());
     assert_eq!(Enum::Struct { name: "John".into(), age: 42 },
         from_value(Value::Map(vec![
             (Value::from("name"), Value::from("John")),
