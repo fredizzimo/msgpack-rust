@@ -403,6 +403,7 @@ fn pass_untagged_enum_to_value() {
         NewtypeVec(Vec<u32>),
         Tuple(String, u32),
         Struct { name: String, age: u32 },
+        NewtypeStruct(InnerStruct),
     }
 
     assert_eq!(Value::Nil,
@@ -434,6 +435,18 @@ fn pass_untagged_enum_to_value() {
             (Value::from("name"), Value::from("John")),
             (Value::from("age"), Value::from(42))]),
         to_value_named(Enum::Struct { name: "John".into(), age: 42 }).unwrap());
+
+
+    assert_eq!(Value::Array(vec![
+            Value::from(-5),
+            Value::from(vec![Value::from("Hello"), Value::from("World")]),
+        ]),
+        to_value(Enum::NewtypeStruct(InnerStruct { a: -5, b: vec!["Hello".into(), "World".into()] })).unwrap());
+    assert_eq!(Value::Map(vec![
+            (Value::from("a"), Value::from(-5)),
+            (Value::from("b"), Value::from(vec![Value::from("Hello"), Value::from("World")])),
+        ]),
+        to_value_named(Enum::NewtypeStruct(InnerStruct { a: -5, b: vec!["Hello".into(), "World".into()] })).unwrap());
 }
 
 
@@ -442,10 +455,10 @@ fn pass_u8_enum_to_value() {
     #[derive(Serialize_repr, PartialEq, Debug)]
     #[repr(u8)]
     enum SmallPrime {
-        Two = 2,
+        _Two = 2,
         Three = 3,
-        Five = 5,
-        Seven = 7,
+        _Five = 5,
+        _Seven = 7,
     }
 
     assert_eq!(Value::from(3),
