@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 use serde_bytes::{ByteBuf, Bytes};
+use serde_repr::Serialize_repr;
 
 use rmp_serde::Serializer;
 use rmpv::encode;
@@ -420,6 +421,24 @@ fn pass_untagged_enum_to_value() {
             (Value::from("name"), Value::from("John")),
             (Value::from("age"), Value::from(42))]),
         to_value_named(Enum::Struct { name: "John".into(), age: 42 }).unwrap());
+}
+
+
+#[test]
+fn pass_u8_enum_to_value() {
+    #[derive(Serialize_repr, PartialEq, Debug)]
+    #[repr(u8)]
+    enum SmallPrime {
+        Two = 2,
+        Three = 3,
+        Five = 5,
+        Seven = 7,
+    }
+
+    assert_eq!(Value::from(3),
+        to_value(SmallPrime::Three).unwrap());
+    assert_eq!(Value::from(3),
+        to_value_named(SmallPrime::Three).unwrap());
 }
 
 #[test]
